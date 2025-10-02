@@ -12,9 +12,14 @@ class OpenMoveCloseStop(Node):
         super().__init__('open_move_close_stop')
         self.publisher_door = self.create_publisher(Float64, '/hinged_glass_door/torque', 10)
         self.publisher_cmd_vel = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.mean_sub = self.create_subscription(Float64, '/feature_mean', self.subscriber_callback, 1)
         self.log = self.get_logger()
         self.timer = self.create_timer(heartbeat_period, self.heartbeat)
         self.start_time = None
+
+        self.kickoff = False
+        self.feature_mean_value = 0.0
+        self.open_door_threshold = 260.0
 
         self.declare_parameter('forward_speed', 0.5)
         self.declare_parameter('open_torque', 2.0)
@@ -39,6 +44,9 @@ class OpenMoveCloseStop(Node):
         ]
         self.state_cumulative_times = [sum(self.state_times[:i+1]) for i in range(len(self.state_times))]
 
+    def subscriber_callback(self, msg: Float64):
+        self.feature_mean_value = msg.data
+
     def heartbeat(self):
         if self.start_time is None:
             self.start_time = self.get_clock().now().seconds_nanoseconds()[0]
@@ -58,15 +66,15 @@ class OpenMoveCloseStop(Node):
             self.publisher_door.publish(torque)
             self.log.info('Opening door')
 
-        elif t < self.state_cumulative_times[1]:
-            twist.linear.x = forward_speed
-            self.publisher_cmd_vel.publish(twist)
-            self.log.info(f'Moving through door at speed {forward_speed}')
+        # elif t < self.state_cumulative_times[1]:
+        #     twist.linear.x = forward_speed
+        #     self.publisher_cmd_vel.publish(twist)
+        #     self.log.info(f'Moving through door at speed {forward_speed}')
 
-        elif t < self.state_cumulative_times[2]:
-            twist.linear.x = 0.0
-            self.publisher_cmd_vel.publish(twist)
-            self.log.info('Stopping robot')
+        # elif t < self.state_cumulative_times[2]:
+        #     twist.linear.x = 0.0
+        #     self.publisher_cmd_vel.publish(twist)
+        #     self.log.info('Stopping robot')
 
         elif t < self.state_cumulative_times[3]:
             torque.data = close_torque
@@ -77,6 +85,19 @@ class OpenMoveCloseStop(Node):
             torque.data = 0.0
             self.publisher_door.publish(torque)
             self.log.info('Finished!')
+
+        if self.feature_mean_value > self.open_door_threshold:
+            if self.kickoff = False:
+                self.kickoff = True
+                twist.linear.x = forward_speed
+                self.publisher_cmd_vel.publish(twist)
+                self.log.info(f'Moving through door at speed {forward_speed}')
+        
+        if self.kickoff = True:
+            twist.linear.x = forward_speed
+            self.publisher_cmd_vel.publish(twist)
+            self.log.info(f'Moving through door at speed {forward_speed}')
+            
 
 
     def spin(self):
