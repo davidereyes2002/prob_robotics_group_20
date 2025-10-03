@@ -17,27 +17,23 @@ class OpenMoveCloseStop(Node):
         self.timer = self.create_timer(heartbeat_period, self.heartbeat)
         self.start_time = None
 
-        self.kickoff = False
-        self.feature_mean_value = 0.0
+        self.state = 0
+        self.feature_mean_value = None
         self.open_door_threshold = 260.0
 
         self.declare_parameter('forward_speed', 0.5)
-        self.declare_parameter('open_torque', 2.0)
-        self.declare_parameter('close_torque', -2.0)
+        self.declare_parameter('open_torque', 1.5)
+        self.declare_parameter('close_torque', -1.5)
 
-        self.declare_parameter('open_time', 10.0)
-        self.declare_parameter('move_time', 10.0)
-        self.declare_parameter('stop_time', 5.0)
+        self.declare_parameter('move_time', 8.0)
+        self.declare_parameter('stop_time', 2.0)
         self.declare_parameter('close_time', 10.0)
 
-        # Precompute time thresholds
-        self.open_time   = self.get_parameter('open_time').value
         self.move_time   = self.get_parameter('move_time').value
         self.stop_time   = self.get_parameter('stop_time').value
         self.close_time  = self.get_parameter('close_time').value
 
         self.state_times = [
-            self.open_time,
             self.move_time,
             self.stop_time,
             self.close_time,
@@ -48,11 +44,8 @@ class OpenMoveCloseStop(Node):
         self.feature_mean_value = msg.data
 
     def heartbeat(self):
-        if self.start_time is None:
-            self.start_time = self.get_clock().now().seconds_nanoseconds()[0]
-            return
-        
-        t = self.get_clock().now().seconds_nanoseconds()[0] - self.start_time
+        if self.start_time is not None:
+            t = self.get_clock().now().seconds_nanoseconds()[0] - self.start_time
 
         forward_speed = self.get_parameter('forward_speed').get_parameter_value().double_value
         open_torque   = self.get_parameter('open_torque').get_parameter_value().double_value
@@ -61,44 +54,54 @@ class OpenMoveCloseStop(Node):
         torque = Float64()
         twist = Twist()
 
-        if t < self.state_cumulative_times[0]:
+        if self.state == 0:
             torque.data = open_torque
             self.publisher_door.publish(torque)
-            self.log.info('Opening door')
+            self.log.info(f'Opening door. Current state: {self.state}')
+            self.log.info(f'This is the feature_mean value: {self.feature_mean_value}')
 
-        # elif t < self.state_cumulative_times[1]:
-        #     twist.linear.x = forward_speed
-        #     self.publisher_cmd_vel.publish(twist)
-        #     self.log.info(f'Moving through door at speed {forward_speed}')
+            if self.feature_mean_value is not None:
+                if self.feature_mean_value < self.open_door_threshold:
+                    torque.data = 0.0
+                    self.publisher_door.publish(torque)
+                    self.state = 1
+                    self.start_time = self.get_clock().now().seconds_nanoseconds()[0]
+                    self.log.info(f'Door is detected to be opened. Transitioning to state {self.state}')
+            else:
+                self.log.warn("Feature mean not received yet, waiting...")
 
-        # elif t < self.state_cumulative_times[2]:
-        #     twist.linear.x = 0.0
-        #     self.publisher_cmd_vel.publish(twist)
-        #     self.log.info('Stopping robot')
+        elif self.state == 1:
+            twist.linear.x = forward_speed
+            self.publisher_cmd_vel.publish(twist)
+            self.log.info(f'Moving through door at speed {forward_speed}. Current state: {self.state}')
 
-        elif t < self.state_cumulative_times[3]:
+            if t > self.state_cumulative_times[0]:
+                self.state = 2
+                self.log.info(f'Robot has fully moved. Transitioning to state {self.state}')
+
+        elif self.state == 2:
+            twist.linear.x = 0.0
+            self.publisher_cmd_vel.publish(twist)
+            self.log.info(f'Stopping robot. Current state: {self.state}')
+
+            if t > self.state_cumulative_times[1]:
+                self.state = 3
+                self.log.info(f'Robot has fully stopped. Transitioning to state {self.state}')
+
+        elif self.state == 3:
             torque.data = close_torque
             self.publisher_door.publish(torque)
-            self.log.info('Closing door')
+            self.log.info(f'Closing door. Current state: {self.state}')
 
-        else:
+            if t > self.state_cumulative_times[2]:
+                self.state = 4
+                self.log.info(f'Door is fully closed. Transitioning to state {self.state}')
+
+        elif self.state == 4:
             torque.data = 0.0
             self.publisher_door.publish(torque)
             self.log.info('Finished!')
-
-        if self.feature_mean_value > self.open_door_threshold:
-            if self.kickoff = False:
-                self.kickoff = True
-                twist.linear.x = forward_speed
-                self.publisher_cmd_vel.publish(twist)
-                self.log.info(f'Moving through door at speed {forward_speed}')
-        
-        if self.kickoff = True:
-            twist.linear.x = forward_speed
-            self.publisher_cmd_vel.publish(twist)
-            self.log.info(f'Moving through door at speed {forward_speed}')
             
-
 
     def spin(self):
         rclpy.spin(self)
