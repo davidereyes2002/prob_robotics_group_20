@@ -33,6 +33,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'firetruck_signal = firetruck_signal.firetruck_signal:main',
             'open_move_close_stop = open_move_close_stop.open_move_close_stop:main',
             'image_mean_feature_x = image_mean_feature_x.image_mean_feature_x:main',
             'flaky_door_opener = flaky_door_opener.flaky_door_opener:main',
