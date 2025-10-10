@@ -19,7 +19,7 @@ class OpenMoveCloseStop(Node):
 
         self.state = 0
         self.feature_mean_value = None
-        self.open_door_threshold = 260.0
+        self.open_door_threshold = 235.0
 
         self.declare_parameter('forward_speed', 0.5)
         self.declare_parameter('open_torque', 1.5)
@@ -39,6 +39,13 @@ class OpenMoveCloseStop(Node):
             self.close_time,
         ]
         self.state_cumulative_times = [sum(self.state_times[:i+1]) for i in range(len(self.state_times))]
+        
+        self.p_open = 0.5
+        self.z_open_x_open = 0.610
+        self.z_closed_x_open = 1 - self.z_open_x_open
+        self.z_closed_x_closed = 1
+        self.z_open_x_closed = 1 - self.z_closed_x_closed
+        self.open_belief_threshold = 0.9999
 
     def subscriber_callback(self, msg: Float64):
         self.feature_mean_value = msg.data
@@ -62,6 +69,11 @@ class OpenMoveCloseStop(Node):
 
             if self.feature_mean_value is not None:
                 if self.feature_mean_value < self.open_door_threshold:
+                    self.p_open = self.z_open_x_open * self.p_open * (1/(self.z_open_x_open * self.p_open + self.z_open_x_closed * (1-self.p_open)))
+                else:
+                    self.p_open = self.z_closed_x_open * self.p_open * (1/(self.z_closed_x_open * self.p_open + self.z_closed_x_closed * (1-self.p_open)))
+            
+                if self.p_open > self.open_belief_threshold:
                     torque.data = 0.0
                     self.publisher_door.publish(torque)
                     self.state = 1
