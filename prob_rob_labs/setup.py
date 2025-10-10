@@ -33,6 +33,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'lab3_assign7 = lab3_assign7.lab3_assign7:main',
             'firetruck_signal = firetruck_signal.firetruck_signal:main',
             'open_move_close_stop = open_move_close_stop.open_move_close_stop:main',
             'image_mean_feature_x = image_mean_feature_x.image_mean_feature_x:main',
