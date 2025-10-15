@@ -33,6 +33,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'cmd_vel_stamped = cmd_vel_stamped.cmd_vel_stamped:main',
+            'lab4_assign1 = lab4_assign1.lab4_assign1:main',
             'lab3_assign8 = lab3_assign8.lab3_assign8:main',
             'lab3_assign7 = lab3_assign7.lab3_assign7:main',
             'firetruck_signal = firetruck_signal.firetruck_signal:main',
