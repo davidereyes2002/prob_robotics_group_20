@@ -33,6 +33,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'EKFNode = EKFNode.EKFNode:main',
             'cmd_vel_stamped = cmd_vel_stamped.cmd_vel_stamped:main',
             'lab4_assign1 = lab4_assign1.lab4_assign1:main',
             'lab3_assign8 = lab3_assign8.lab3_assign8:main',
