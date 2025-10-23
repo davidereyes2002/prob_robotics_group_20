@@ -36,6 +36,8 @@ class EKFNode(Node):
         self.for_factor_angular = 0.749
         self.input_gain = 0.9
 
+        self.dt_threshold = 1
+
         self.x = np.zeros((5, 1))
         self.state_covariance = np.zeros((5, 5))
         self.last_time = None
@@ -99,6 +101,9 @@ class EKFNode(Node):
             return
         dt = t - self.last_time
         self.last_time = t
+
+        if dt > self.dt_threshold:
+            return
 
         omega_g = imu_msg.angular_velocity.z
         imu_var = imu_msg.angular_velocity_covariance[8] if imu_msg.angular_velocity_covariance[8] != 0 else self.imu_covariance_scalar
