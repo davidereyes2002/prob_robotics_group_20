@@ -5,6 +5,12 @@ from prob_rob_msgs.msg import Point2DArrayStamped, Point2D
 import numpy as np
 import message_filters
 
+Min_pts = 6
+Min_x_margin_percentage = 1/16
+Min_y_margin_percentage = 1/32
+Max_y_variance_percentage = 0.0273
+Min_y_mean_percentage = 5/12
+
 class Lab5Assign2(Node):
 
     def __init__(self):
@@ -15,7 +21,7 @@ class Lab5Assign2(Node):
         self.target_vision_topic = f"/vision_{self.landmark_target}/corners"
         self.landmark_height = 0.5
         self.corners_sub = message_filters.Subscriber(self, Point2DArrayStamped, self.target_vision_topic)
-        
+
         self.ts = message_filters.ApproximateTimeSynchronizer([self.camera_info_sub, self.corners_sub], queue_size=10, slop=0.1)
         
         self.height = None
@@ -30,46 +36,62 @@ class Lab5Assign2(Node):
 
 
     def synced_callback(self, cam_msg: CameraInfo, corners_msg: Point2DArrayStamped):
-        raw_p_matrix = cam_msg.p
-        self.p_matrix = self.extract_p_matrix(raw_p_matrix)
-        self.get_logger().info("CameraInfo message extracted and synced")
-        
-        points = corners_msg.points
-        if not points:
-            self.get_logger().warn("No corners detected for cyan landmark.")
-            return
+
+        self.distance, self.theta = self.estimate_distance_bearing(cam_msg, corners_msg)
+
+        if self.distance or self.theta:
+            msg_out = Point2DArrayStamped()
+            msg_out.header.stamp = self.get_clock().now().to_msg()
+            msg_out.header.frame_id = 'camera_link'
+            pt = Point2D()
+            pt.x = float(self.distance)
+            pt.y = float(self.theta)
+            msg_out.points = [pt]
+
+            self.pub_range_bearing.publish(msg_out)
+            self.get_logger().info(f"Estimation Published d={self.distance:.3f} m, θ={self.theta:.3f} rad. \n")
         else:
-            self.height, self.x_center = self.calculate_height_and_x_center(points)
-            self.get_logger().info(f"Vision Corners received and processed")
+            self.get_logger().info("Estimation Invalid, Skip Publishing. \n")
     
-        self.distance, self.theta = self.estimate_distance_bearing()
-        self.get_logger().info(f"Estimated distance: {self.distance}, estimated theta: {self.theta}")
+    def estimate_distance_bearing(self, cam_msg: CameraInfo, corners_msg: Point2DArrayStamped):
+        points = corners_msg.points
+        img_w = cam_msg.width
+        img_h = cam_msg.height
+        p_matrix = np.array(cam_msg.p).reshape(3, 4)[:, :3]
 
-        msg_out = Point2DArrayStamped()
-        msg_out.header.stamp = self.get_clock().now().to_msg()
-        msg_out.header.frame_id = 'camera_link'
-        pt = Point2D()
-        pt.x = float(self.distance)
-        pt.y = float(self.theta)
-        msg_out.points = [pt]
+        if not points or len(points) < Min_pts:
+            self.get_logger().warn(f"No {self.landmark_target} landmark detected.")
+            theta = None
+            distance = None
+            return distance, theta
 
-        self.pub_range_bearing.publish(msg_out)
-        self.get_logger().info(f"Published d={self.distance:.3f} m, θ={self.theta:.3f} rad")
-
-    def calculate_height_and_x_center(self, points):
         x = np.array([p.x for p in points])
         y = np.array([p.y for p in points])
-        height = np.max(y) - np.min(y)
-        x_center = (np.max(x) + np.min(x)) / 2.0
-        return height, x_center
-    
-    def extract_p_matrix(self, raw_p_matrix):
-        p_matrix = np.array(raw_p_matrix).reshape(3, 4)[:, :3]
-        return p_matrix
-    
-    def estimate_distance_bearing(self):
-        theta = np.arctan((self.p_matrix[0][2]-self.x_center)/self.p_matrix[0][0])
-        distance = self.landmark_height * self.p_matrix[1][1]/(self.height * np.cos(theta))
+        x_min, x_20, x_mean, x_80, x_max = float(np.min(x)), float(np.percentile(x, 20)), float(np.mean(x)), float(np.percentile(y, 80)), float(np.max(x))
+        y_min, y_20, y_mean, y_80, y_max = float(np.min(y)), float(np.percentile(y, 20)), float(np.mean(y)), float(np.percentile(y, 80)), float(np.max(y))
+        x_distance_margin = min([x_min, img_w-x_max])
+        y_distance_margin = min([y_min, img_h-y_max])
+        x_variance = np.var(x)
+        y_variance = np.var(y)        
+        
+        if x_distance_margin < img_w * Min_x_margin_percentage:
+            self.get_logger().warn(f"Left or right side of {self.landmark_target} landmark is out of sight.")
+            theta = None
+            distance = None
+        elif (y_variance < Max_y_variance_percentage*img_h*img_h) or (y_mean > img_h * Min_y_mean_percentage) or (y_distance_margin < img_h * Min_y_margin_percentage):
+        # elif (y_variance < 6300)  or (y_mean > 200) or (y_distance_margin <15):  
+            self.get_logger().warn(f"Up or bottom side of {self.landmark_target} landmark is out of sight.")
+            theta = None
+            distance = None              
+        else:
+            x_center_perceived = (x_80 + x_20) / 2.0
+            height_perceived = y_max - y_min
+            cx = p_matrix[0][2]
+            fx = p_matrix[0][0]
+            fy = p_matrix[1][1]
+            theta = np.arctan((cx - x_center_perceived)/fx)
+            distance = self.landmark_height * fy /(height_perceived * np.cos(theta))
+            self.get_logger().info(f"{self.landmark_target} Landmark Is Valid Within Sight")
         return distance, theta
 
     def spin(self):
