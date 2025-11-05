@@ -15,9 +15,13 @@ class Lab5Assign2(Node):
 
     def __init__(self):
         super().__init__('lab5_assign2')
+
         self.camera_info_sub = message_filters.Subscriber(self, CameraInfo, '/camera/camera_info')
         
-        self.landmark_target = "cyan"
+        self.declare_parameter('landmark_target', 'cyan')
+        self.landmark_target = self.get_parameter('landmark_target').get_parameter_value().string_value
+        self.get_logger().info(f"Landmark target color set to: {self.landmark_target} \n")
+
         self.target_vision_topic = f"/vision_{self.landmark_target}/corners"
         self.landmark_height = 0.5
         self.corners_sub = message_filters.Subscriber(self, Point2DArrayStamped, self.target_vision_topic)
