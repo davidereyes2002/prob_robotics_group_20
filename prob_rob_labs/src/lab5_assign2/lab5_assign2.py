@@ -5,11 +5,10 @@ from prob_rob_msgs.msg import Point2DArrayStamped, Point2D
 import numpy as np
 import message_filters
 
-Min_pts = 6
-Min_x_margin_percentage = 1/16
-Min_y_margin_percentage = 1/32
-Max_y_variance_percentage = 0.0273
-Min_y_mean_percentage = 5/12
+Min_pts = 4
+Min_x_margin_percentage = 0.02
+Min_y_margin_percentage = 0.03
+y_max_percentage = 0.625
 
 class Lab5Assign2(Node):
 
@@ -23,7 +22,8 @@ class Lab5Assign2(Node):
         self.get_logger().info(f"Landmark target color set to: {self.landmark_target} \n")
 
         self.target_vision_topic = f"/vision_{self.landmark_target}/corners"
-        self.landmark_height = 0.5
+        self.declare_parameter('landmark_height', 0.5)
+        self.landmark_height = self.get_parameter('landmark_height').value
         self.corners_sub = message_filters.Subscriber(self, Point2DArrayStamped, self.target_vision_topic)
 
         self.ts = message_filters.ApproximateTimeSynchronizer([self.camera_info_sub, self.corners_sub], queue_size=10, slop=0.1)
@@ -71,22 +71,20 @@ class Lab5Assign2(Node):
 
         x = np.array([p.x for p in points])
         y = np.array([p.y for p in points])
-        x_min, x_20, x_mean, x_80, x_max = float(np.min(x)), float(np.percentile(x, 20)), float(np.mean(x)), float(np.percentile(y, 80)), float(np.max(x))
-        y_min, y_20, y_mean, y_80, y_max = float(np.min(y)), float(np.percentile(y, 20)), float(np.mean(y)), float(np.percentile(y, 80)), float(np.max(y))
+        x_min, x_20, x_80, x_max = float(np.min(x)), float(np.percentile(x, 20)), float(np.percentile(x, 80)), float(np.max(x))
+        y_min, y_20, y_80, y_max = float(np.min(y)), float(np.percentile(y, 20)), float(np.percentile(y, 80)), float(np.max(y))
         x_distance_margin = min([x_min, img_w-x_max])
         y_distance_margin = min([y_min, img_h-y_max])
-        x_variance = np.var(x)
-        y_variance = np.var(y)        
         
         if x_distance_margin < img_w * Min_x_margin_percentage:
             self.get_logger().warn(f"Left or right side of {self.landmark_target} landmark is out of sight.")
             theta = None
             distance = None
-        elif (y_variance < Max_y_variance_percentage*img_h*img_h) or (y_mean > img_h * Min_y_mean_percentage) or (y_distance_margin < img_h * Min_y_margin_percentage):
-        # elif (y_variance < 6300)  or (y_mean > 200) or (y_distance_margin <15):  
+        elif (y_max > img_h * y_max_percentage) or (y_distance_margin < img_h * Min_y_margin_percentage):
             self.get_logger().warn(f"Up or bottom side of {self.landmark_target} landmark is out of sight.")
             theta = None
-            distance = None              
+            distance = None
+            
         else:
             x_center_perceived = (x_80 + x_20) / 2.0
             height_perceived = y_max - y_min
