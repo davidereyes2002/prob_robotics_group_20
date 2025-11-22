@@ -1,0 +1,25 @@
+landmarks:
+  red:
+    x: 8.5
+    y: -5.0
+    height: 0.5
+
+  green:
+    x: 8.5
+    y: 5.0
+    height: 0.5
+
+  yellow:
+    x: -11.5
+    y: 5.0
+    height: 0.5
+
+  magenta:
+    x: -11.5
+    y: -5.0
+    height: 0.5
+
+  cyan:
+    x: 0.0
+    y: 0.0
+    height: 0.5
