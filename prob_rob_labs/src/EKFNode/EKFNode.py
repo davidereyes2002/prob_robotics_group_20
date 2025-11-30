@@ -36,9 +36,20 @@ class EKFNode(Node):
         self.for_factor_angular = 0.749
         self.input_gain = 0.9
 
-        self.dt_threshold = 1
+        self.dt_threshold = 1.
 
-        self.x = np.zeros((5, 1))
+        self.initial_x = -1.5
+        self.initial_y = 0.0
+        self.initial_theta = 0.0
+
+        self.x = np.array([
+            [self.initial_theta],
+            [self.initial_x],
+            [self.initial_y],
+            [0.0],
+            [0.0]
+        ])
+
         self.state_covariance = np.zeros((5, 5))
         self.last_time = None
         
