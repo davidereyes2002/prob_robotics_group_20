@@ -1,3 +1,8 @@
+import csv
+import os
+from time import time
+from ament_index_python.packages import get_package_share_directory
+
 import rclpy
 from rclpy.node import Node
 import message_filters
@@ -43,7 +48,7 @@ class Lab5Assign3(Node):
         }
 
         if self.landmark_target not in self.link_name:
-            self.log().error(f"Unknown landmark_target '{self.landmark_target}'. Valid options: cyan, yellow, green, magenta, red.")
+            self.log.error(f"Unknown landmark_target '{self.landmark_target}'. Valid options: cyan, yellow, green, magenta, red.")
             raise RuntimeError("Invalid landmark_target parameter.")
 
         self.landmark_link_name = self.link_name[self.landmark_target]
@@ -64,6 +69,37 @@ class Lab5Assign3(Node):
 
         self.error_topic = f'/meas_error/{self.landmark_target}'
         self.error_pub = self.create_publisher(Point2DArrayStamped, self.error_topic, 10)
+
+        pkg_share = get_package_share_directory("prob_rob_labs")
+
+        # Compute the *source* misc folder manually
+        # We look for "src/prob_rob_labs_ros_2"
+        ws_src_root = os.path.expanduser("~/ros2_ws/src/prob_rob_labs_ros_2")
+
+        misc_folder = os.path.join(ws_src_root, "misc")
+        os.makedirs(misc_folder, exist_ok=True)   # ensure folder exists
+
+        self.csv_path = os.path.join(
+            misc_folder,
+            f"measurement_errors_{self.landmark_target}.csv"
+        )
+
+        self.get_logger().info(f"CSV will be saved to: {self.csv_path}")
+
+        # Create header if file does not exist
+        if not os.path.exists(self.csv_path):
+            self.get_logger().info(f"Creating new CSV log at {self.csv_path}")
+            with open(self.csv_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    "unix_time",
+                    "landmark",
+                    "meas_d", "meas_theta",
+                    "true_d", "true_theta",
+                    "err_d", "err_theta"
+                ])
+        else:
+            self.get_logger().info(f"Appending to existing CSV log: {self.csv_path}")
 
     def link_states_callback(self, msg: LinkStates):
         if self.name_to_idx is None:
@@ -101,6 +137,10 @@ class Lab5Assign3(Node):
         d_meas = float(msg.points[0].x)
         theta_meas = float(msg.points[0].y)
 
+        if not np.isfinite(d_meas) or not np.isfinite(theta_meas):
+            self.log.warn("Non-finite measurement received. Skipping.")
+            return
+
         d_true, theta_true = self.compute_true(self.cam_pose, self.lmk_pose)
 
         e_d = d_meas - d_true
@@ -123,12 +163,25 @@ class Lab5Assign3(Node):
 
         self.error_pub.publish(err_msg)
 
-    def compute_true(self, cam_pose: Pose, lmk_pose: Pose):
-        cx = cam_pose.position.x
-        cy = cam_pose.position.y
+        try:
+            with open(self.csv_path, "a", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    time(),                   # unix_time
+                    self.landmark_target,     # landmark
+                    d_meas,
+                    theta_meas,
+                    d_true,
+                    theta_true,
+                    e_d,
+                    e_theta
+                ])
+        except Exception as ex:
+            self.log.error(f"Failed to write CSV row: {ex}")
 
-        lx = lmk_pose.position.x
-        ly = lmk_pose.position.y
+    def compute_true(self, cam_pose: Pose, lmk_pose: Pose):
+        cx, cy = cam_pose.position.x, cam_pose.position.y
+        lx, ly = lmk_pose.position.x, lmk_pose.position.y
 
         dx = lx - cx
         dy = ly - cy
