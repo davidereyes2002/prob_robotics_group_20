@@ -218,6 +218,7 @@ class EkfLocalization(Node):
 
         self.ekf_predict(dt)
         self.system_time = t_odom
+        self.publish_ekf_pose()
 
     def ekf_predict(self, dt):
         theta = float(self.x[0, 0])
@@ -292,7 +293,6 @@ class EkfLocalization(Node):
 
         H = np.zeros((2,3))
 
-        H[0,0] = 0
         H[0,1] = -dx_l / sqrt_q
         H[0,2] = -dy_l / sqrt_q
 
@@ -313,8 +313,17 @@ class EkfLocalization(Node):
         S = H @ self.P @ H.T + R
         K = self.P @ H.T @ np.linalg.inv(S)
 
-        self.x = self.x + K @ y
-        self.x[0,0] = wrap_angle(self.x[0,0])
+        state_cam = np.array([[theta],[x_cam],[y_cam]]) + K @ y
+        state_cam[0,0] = wrap_angle(state_cam[0,0])
+
+        θ_new = state_cam[0,0]
+
+        x_new = state_cam[1,0] - math.cos(θ_new)*dx + math.sin(θ_new)*dy
+        y_new = state_cam[2,0] - math.sin(θ_new)*dx - math.cos(θ_new)*dy
+
+        self.x[0,0] = θ_new
+        self.x[1,0] = x_new
+        self.x[2,0] = y_new
 
         self.P = (np.eye(3) - K @ H) @ self.P
 
@@ -350,20 +359,6 @@ class EkfLocalization(Node):
         odom.pose.covariance = pose_cov.flatten().tolist()
 
         self.ekf_pub.publish(odom)
-
-        # t = TransformStamped()
-        # t.header.stamp = odom.header.stamp
-        # t.header.frame_id = "odom"
-        # t.child_frame_id = "base_footprint"
-        # t.transform.translation.x = x
-        # t.transform.translation.y = y
-        # t.transform.translation.z = 0.0
-        # t.transform.rotation.x = quat[0]
-        # t.transform.rotation.y = quat[1]
-        # t.transform.rotation.z = quat[2]
-        # t.transform.rotation.w = quat[3]
-
-        # self.tf_broadcaster.sendTransform(t)
 
     def spin(self):
         rclpy.spin(self)
