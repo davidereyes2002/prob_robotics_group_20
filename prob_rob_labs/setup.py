@@ -33,6 +33,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'lab6_assign5 = lab6_assign5.lab6_assign5:main',
             'localization_error = localization_error.localization_error:main',
             'ekf_localization = ekf_localization.ekf_localization:main',
             'lab5_assign3 = lab5_assign3.lab5_assign3:main',

@@ -332,7 +332,7 @@ class EkfLocalization(Node):
     def publish_ekf_pose(self):
         odom = Odometry()
         odom.header.stamp = self.get_clock().now().to_msg()
-        odom.header.frame_id = "odom"
+        odom.header.frame_id = "map"
         odom.child_frame_id = "base_footprint"
 
         theta, x, y = self.x.flatten()
