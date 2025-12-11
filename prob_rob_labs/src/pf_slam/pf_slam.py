@@ -5,10 +5,15 @@ from sensor_msgs.msg import CameraInfo
 from prob_rob_msgs.msg import Point2DArrayStamped, Point2D
 from nav_msgs.msg import Odometry
 
+from visualization_msgs.msg import Marker, MarkerArray
+from tf_transformations import quaternion_from_euler
+from geometry_msgs.msg import Point
+
 import os
 import yaml
 import numpy as np
 import math
+import copy
 
 min_points = 4
 min_x_margin_percent = 0.02
@@ -64,6 +69,10 @@ class PfSlam(Node):
 
         self.create_subscription(Odometry, '/ekf_odom', self.odom_callback, 10)
 
+        self.pose_pub = self.create_publisher(Odometry, '/slam_pose', 10)
+        self.map_pub = self.create_publisher(MarkerArray, '/slam_map_markers', 10)
+        self.particle_pub = self.create_publisher(Marker, '/slam_particles', 10)
+
         #### Parameter declaring #####
         self.p_matrix = None
         self.img_h = None
@@ -84,6 +93,12 @@ class PfSlam(Node):
         self.num_particles = 100
         self.particles = []
         self.initialize_particles()
+        self.alpha_thresh = 0.5
+
+    def get_best_particles(self):
+        if not self.particles:
+            return None
+        return max(self.particles, key = lambda p:p["weight"])
 
     def initialize_particles(self):
         self.particles = []
@@ -223,7 +238,7 @@ class PfSlam(Node):
         self.last_omega = omega
 
         self.pf_predict(dt)
-        self.log.info("Valid odom update: dt={dt:.3f}, v={self.last_vel:.3f}, omega={self.last_omega:.3f}")
+        self.log.info(f"Valid odom update: dt={dt:.3f}, v={self.last_vel:.3f}, omega={self.last_omega:.3f}")
 
     def pf_predict(self, dt: float):
         ### to propagate all particles forward
@@ -377,6 +392,162 @@ class PfSlam(Node):
         else:
             for p in self.particles:
                 p["weight"] /= total_w
+
+        self.resample_particles()
+
+        stamp = self.get_clock().now().to_msg()
+        self.publish_slam_pose(stamp)
+        self.publish_slam_map(stamp)
+        self.publish_particles(stamp)
+
+
+    def resample_particles(self):
+        '''
+            Low variance (systematic) resampling
+        '''
+        N = len(self.particles)
+        if N == 0:
+            return
+                
+        weights = np.array([p["weight"] for p in self.particles], dtype=float)
+        Neff = 1.0 / np.sum(np.square(weights))
+        if Neff > self.alpha_thresh * N:
+            return
+        self.log.info("Resampling particles")
+
+        positions = (np.arange(N) + np.random.uniform(0.0, 1.0)) / N
+        cumulative_sum = np.cumsum(weights)
+        cumulative_sum[-1] = 1.0
+
+        indexes = []
+        i = 0
+        for pos in positions:
+            while pos > cumulative_sum[i]:
+                i += 1
+            indexes.append(i)
+
+        new_particles = []
+        for idx in indexes:
+            p = copy.deepcopy(self.particles[idx])
+            p["weight"] = 1.0 / N
+            new_particles.append(p)
+
+        self.particles = new_particles
+
+    def publish_slam_pose(self, stamp):
+        best = self.get_best_particles()
+        if best is None:
+            return
+        
+        theta = best["theta"]
+        x = best["x"]
+        y = best["y"]
+
+        odom = Odometry()
+        odom.header.stamp = stamp
+        odom.header.frame_id = "odom"
+        odom.child_frame_id = "base_footprint"
+
+        quat = quaternion_from_euler(0.0, 0.0, theta)
+
+        odom.pose.pose.position.x = x
+        odom.pose.pose.position.y = y
+        odom.pose.pose.position.z = 0.0
+        odom.pose.pose.orientation.x = quat[0]
+        odom.pose.pose.orientation.y = quat[1]
+        odom.pose.pose.orientation.z = quat[2]
+        odom.pose.pose.orientation.w = quat[3]
+
+        odom.pose.covariance = [0.0] * 36
+        self.pose_pub.publish(odom)
+
+    def publish_slam_map(self, stamp):
+        best = self.get_best_particles()
+        if best is None:
+            return
+
+        markers = MarkerArray()
+        marker_id = 0
+
+        for color_name, lm_info in self.landmarks["landmarks"].items():
+            if color_name not in best["landmarks"]:
+                continue
+
+            lm = best["landmarks"][color_name]
+            mu = lm["mu"]
+            lm_x = float(mu[0, 0])
+            lm_y = float(mu[1, 0])
+
+            m = Marker()
+            m.header.stamp = stamp
+            m.header.frame_id = "odom"
+            m.ns = "slam_landmarks"
+            m.id = marker_id
+            marker_id += 1
+
+            m.type = Marker.SPHERE
+            m.action = Marker.ADD
+            m.pose.position.x = lm_x
+            m.pose.position.y = lm_y
+            m.pose.position.z = 0.1  # small height
+            m.pose.orientation.w = 1.0
+
+            m.scale.x = 0.3
+            m.scale.y = 0.3
+            m.scale.z = 0.3
+
+            if color_name == "red":
+                m.color.r, m.color.g, m.color.b = 1.0, 0.0, 0.0
+            elif color_name == "green":
+                m.color.r, m.color.g, m.color.b = 0.0, 1.0, 0.0
+            elif color_name == "yellow":
+                m.color.r, m.color.g, m.color.b = 1.0, 1.0, 0.0
+            elif color_name == "magenta":
+                m.color.r, m.color.g, m.color.b = 1.0, 0.0, 1.0
+            elif color_name == "cyan":
+                m.color.r, m.color.g, m.color.b = 0.0, 1.0, 1.0
+            else:
+                m.color.r, m.color.g, m.color.b = 1.0, 1.0, 1.0
+
+            m.color.a = 1.0
+
+            markers.markers.append(m)
+        
+        self.map_pub.publish(markers)
+
+    def publish_particles(self, stamp):
+        if not self.particles:
+            return
+        
+        marker = Marker()
+        marker.header.stamp = stamp
+        marker.header.frame_id = "odom"
+        marker.ns = "slam_particles"
+        marker.id = 0
+        marker.type = Marker.POINTS
+        marker.action = Marker.ADD
+
+        marker.scale.x = 0.05
+        marker.scale.y = 0.05
+        marker.scale.z = 0.05
+
+        # Light gray
+        marker.color.r = 0.5
+        marker.color.g = 0.5
+        marker.color.b = 0.5
+        marker.color.a = 1.0
+
+        points = []
+        for p in self.particles:
+            pt = Point()
+            pt.x = p["x"]
+            pt.y = p["y"]
+            pt.z = 0.05
+            points.append(pt)
+
+        marker.points = points
+
+        self.particle_pub.publish(marker)
 
     def spin(self):
         rclpy.spin(self)
