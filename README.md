@@ -6,10 +6,7 @@ This repository contains a **from-scratch implementation of FastSLAM (FastSLAM 1
 
 The implementation integrates vision-based landmark observations, EKF-filtered odometry, and particle resampling to estimate both the robot trajectory and a sparse landmark map in a simulated Gazebo environment.
    
-<p align="center">
-  <img src="misc/clip2.gif" width="600">
-</p>
-
+![Demo GIF](misc/clip2.gif)
 ---
 
 ## Demo Videos
@@ -41,12 +38,12 @@ The implementation integrates vision-based landmark observations, EKF-filtered o
 ### FastSLAM Factorization
 The SLAM posterior is factorized according to the FastSLAM principle:
 
-\[
+$$
 p(x_{1:t}, m \mid z_{1:t}, u_{1:t})
 =
 p(x_{1:t} \mid z_{1:t}, u_{1:t})
 \prod_i p(m_i \mid x_{1:t}, z_{1:t})
-\]
+$$
 
 This allows:
 - a **particle filter** to represent the robot pose distribution, and  
@@ -55,11 +52,11 @@ This allows:
 ### Particle Representation
 
 Each particle represents a complete SLAM hypothesis and stores:
-- robot pose: \( (x, y, \theta) \)
+- robot pose: $ (x, y, \theta) $
 - particle weight
 - a per-landmark map:
-  - landmark mean \( \mu_i \in \mathbb{R}^2 \)
-  - landmark covariance \( \Sigma_i \in \mathbb{R}^{2\times2} \)
+  - landmark mean $ \mu_i \in \mathbb{R}^2 $
+  - landmark covariance  $ \Sigma_i \in \mathbb{R}^{2\times2} $
 
 Landmarks are indexed by color, providing known data association.
 
@@ -102,12 +99,10 @@ As the robot revisits previously observed landmarks, inconsistent particle hypot
 
 ## Observed Behavior (as shown in videos)
 
-- Particles are uniformly initialized across the environment.
-- Early landmark observations result in multiple valid pose hypotheses due to limited information.
-- As the robot moves and observes additional landmarks:
+articles are uniformly initialized across the environment. Early landmark observations result in multiple valid pose hypotheses due to limited information. As the robot moves and observes additional landmarks:
   - particle hypotheses cluster
   - map consistency improves
-- After repeated landmark observations and loop closure:
+After repeated landmark observations and loop closure:
   - inconsistent particles are eliminated
   - both robot pose and landmark map converge to a stable solution
 
@@ -130,5 +125,37 @@ This explains the small, persistent offsets visible in:
 Despite this offset, **relative geometry and map consistency are preserved**, which is the defining criterion for successful SLAM.
 
 ---
+
+## System Execution
+
+**1. Launch Gazebo Environment with Landmarks
+```
+ros2 launch prob_rob_labs turtlebot3_among_landmarks_launch.py
+```
+**2. Launch EKFNode publishing Odometry
+```
+ros2 launch prob_rob_labs EKFNode_launch.py
+```
+**3. Launch Particle Filter SLAM Module
+```
+ros2 launch prob_rob_labs pf_slam_launch.py
+```
+**4. Launch Ground Truth Publisher
+```
+ros2 launch prob_rob_labs lab4_assign1_launch.py
+```
+
+## References
+## References
+
+- Thrun, S., Burgard, W., Fox, D.  
+  **FastSLAM: A Factored Solution to the Simultaneous Localization and Mapping Problem.**  
+  *Proceedings of the AAAI Conference on Artificial Intelligence*, 2002.  
+  https://www.aaai.org/Papers/AAAI/2002/AAAI02-089.pdf
+
+- Thrun, S., Burgard, W., Fox, D.  
+  **Probabilistic Robotics.**  
+  MIT Press, 2005.  
+  https://mitpress.mit.edu/9780262201629/probabilistic-robotics/
 
 
