@@ -95,7 +95,7 @@ As the robot revisits previously observed landmarks, inconsistent particle hypot
 
 ## Observed Behavior (as shown in videos)
 
-articles are uniformly initialized across the environment. Early landmark observations result in multiple valid pose hypotheses due to limited information. As the robot moves and observes additional landmarks:
+Particles are uniformly initialized across the environment. Early landmark observations result in multiple valid pose hypotheses due to limited information. As the robot moves and observes additional landmarks:
   - particle hypotheses cluster
   - map consistency improves
 After repeated landmark observations and loop closure:
