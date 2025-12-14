@@ -5,8 +5,7 @@
 This repository contains a **from-scratch implementation of FastSLAM (FastSLAM 1.0)** for a TurtleBot3 platform in ROS 2. The system performs simultaneous localization and mapping using a particle filter over robot pose and independent EKF landmark estimators per particle, following the formulation introduced by **Thrun, Montemerlo, and colleagues**.
 
 The implementation integrates vision-based landmark observations, EKF-filtered odometry, and particle resampling to estimate both the robot trajectory and a sparse landmark map in a simulated Gazebo environment.
-   
-![Demo GIF](misc/clip2.gif)
+
 ---
 
 ## Demo Videos
@@ -39,10 +38,7 @@ The implementation integrates vision-based landmark observations, EKF-filtered o
 The SLAM posterior is factorized according to the FastSLAM principle:
 
 $$
-p(x_{1:t}, m \mid z_{1:t}, u_{1:t})
-=
-p(x_{1:t} \mid z_{1:t}, u_{1:t})
-\prod_i p(m_i \mid x_{1:t}, z_{1:t})
+p(x_{1:t}, m \mid z_{1:t}, u_{1:t}) = p(x_{1:t} \mid z_{1:t}, u_{1:t}) \prod_i p(m_i \mid x_{1:t}, z_{1:t})
 $$
 
 This allows:
@@ -52,11 +48,11 @@ This allows:
 ### Particle Representation
 
 Each particle represents a complete SLAM hypothesis and stores:
-- robot pose: $ (x, y, \theta) $
+- robot pose: $(x, y, \theta)$
 - particle weight
 - a per-landmark map:
-  - landmark mean $ \mu_i \in \mathbb{R}^2 $
-  - landmark covariance  $ \Sigma_i \in \mathbb{R}^{2\times2} $
+  - landmark mean $\mu_i \in \mathbb{R}^2$
+  - landmark covariance  $\Sigma_i \in \mathbb{R}^{2\times2}$
 
 Landmarks are indexed by color, providing known data association.
 
@@ -90,7 +86,7 @@ $$
 N_{\text{eff}} = \frac{1}{\sum_i w_i^2}
 $$
 
-Systematic resampling is triggered when $N_{\text{eff}} < \alpha N$, with & \alpha = 0.5&, allowing unlikely hypotheses to be discarded while preserving multimodal pose distributions. 
+Systematic resampling is triggered when $N_{\text{eff}} < \alpha N$, with &\alpha = 0.5&, allowing unlikely hypotheses to be discarded while preserving multimodal pose distributions. 
 
 ### Covergence and Loop Closure
 As the robot revisits previously observed landmarks, inconsistent particle hypotheses receive low likelihood and are eliminated during resampling. This process enables both robot pose and landmark map estimates to converge to a consistent solution, achieving loop closure without maintaining a full joint covariance.
@@ -128,24 +124,25 @@ Despite this offset, **relative geometry and map consistency are preserved**, wh
 
 ## System Execution
 
-**1. Launch Gazebo Environment with Landmarks
+**1. Launch Gazebo Environment with Landmarks**
 ```
 ros2 launch prob_rob_labs turtlebot3_among_landmarks_launch.py
 ```
-**2. Launch EKFNode publishing Odometry
+**2. Launch EKFNode publishing Odometry**
 ```
 ros2 launch prob_rob_labs EKFNode_launch.py
 ```
-**3. Launch Particle Filter SLAM Module
+**3. Launch Particle Filter SLAM Module**
 ```
 ros2 launch prob_rob_labs pf_slam_launch.py
 ```
-**4. Launch Ground Truth Publisher
+**4. Launch Ground Truth Publisher**
 ```
 ros2 launch prob_rob_labs lab4_assign1_launch.py
 ```
 
-## References
+---
+
 ## References
 
 - Thrun, S., Burgard, W., Fox, D.  
