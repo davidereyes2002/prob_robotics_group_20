@@ -7,7 +7,7 @@ from nav_msgs.msg import Odometry
 
 from visualization_msgs.msg import Marker, MarkerArray
 from tf_transformations import quaternion_from_euler
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, PoseArray, Pose
 
 import os
 import yaml
@@ -32,7 +32,7 @@ class PfSlam(Node):
         self.log = self.get_logger()
 
         self.declare_parameter('alpha_v', 0.02)
-        self.declare_parameter('alpha_w', 0.02) 
+        self.declare_parameter('alpha_w', 0.02)
         self.declare_parameter('meas_sigma_d_a', 0.017340)
         self.declare_parameter('meas_sigma_d_b', 0.001990)
         self.declare_parameter('meas_sigma_t_a', 0.000104)
@@ -72,11 +72,12 @@ class PfSlam(Node):
         self.pose_pub = self.create_publisher(Odometry, '/slam_pose', 10)
         self.map_pub = self.create_publisher(MarkerArray, '/slam_map_markers', 10)
         self.particle_pub = self.create_publisher(Marker, '/slam_particles', 10)
+        self.landmarks_pub = self.create_publisher(PoseArray, "/slam_landmarks", 10)
 
         #### Parameter declaring #####
         self.p_matrix = None
         self.img_h = None
-        self.img_w = None 
+        self.img_w = None
         self.system_time = None
         self.last_odom_time = None
 
@@ -90,7 +91,7 @@ class PfSlam(Node):
         self.meas_sigma_t_a = self.get_parameter('meas_sigma_t_a').value
         self.meas_sigma_t_b = self.get_parameter('meas_sigma_t_b').value
 
-        self.num_particles = 100
+        self.num_particles = 1000
         self.particles = []
         self.initialize_particles()
         self.alpha_thresh = 0.5
@@ -107,13 +108,14 @@ class PfSlam(Node):
         initial_y = 0.0
 
         for _ in range (self.num_particles):
-            theta = initial_theta + np.random.normal(0, 0.05)
-            x = initial_x + np.random.normal(0, 0.1)
-            y = initial_y + np.random.normal(0, 0.1)
+            theta = np.random.uniform(-np.pi, np.pi)
+            x = np.random.uniform(-10.0, 10.0)
+            y = np.random.uniform(-10.0, 10.0)
+
 
             particle = {
                 "theta": theta,
-                "x": x, 
+                "x": x,
                 "y": y,
                 "weight": 1.0 / self.num_particles,
                 "landmarks": {}
@@ -265,7 +267,7 @@ class PfSlam(Node):
             if abs(w_sample) < EPS_ANG:
                 dtheta = 0.0
                 dx = v_sample * dt * math.cos(theta)
-                dy = v_sample * dt * math.cos(theta)
+                dy = v_sample * dt * math.sin(theta)
             else:
                 dtheta = w_sample * dt
                 dx = (v_sample / w_sample) * (math.sin(theta + w_sample * dt) - math.sin(theta))
@@ -276,6 +278,10 @@ class PfSlam(Node):
             p["theta"] = theta_new
             p["x"] = x + dx
             p["y"] = y + dy
+
+        stamp = self.get_clock().now().to_msg()
+        self.publish_slam_pose(stamp)
+        self.publish_particles(stamp)
 
     def pf_update(self, color: str, dist: float, bearing: float):
         '''
@@ -379,7 +385,13 @@ class PfSlam(Node):
             # measurement likelihood for this particle
 
             exponent = -0.5 * float(y.T @ S_inv @ y)
-            likelihood = math.exp(exponent)
+            det_S = np.linalg.det(S)
+
+            if det_S <= 1e-12:
+                continue
+
+            norm = 1.0 / math.sqrt((2 * math.pi)**2 * det_S)
+            likelihood = norm * math.exp(exponent)
 
             p["weight"] *= likelihood
 
@@ -399,7 +411,7 @@ class PfSlam(Node):
         self.publish_slam_pose(stamp)
         self.publish_slam_map(stamp)
         self.publish_particles(stamp)
-
+        self.publish_landmarks(stamp)
 
     def resample_particles(self):
         '''
@@ -532,9 +544,9 @@ class PfSlam(Node):
         marker.scale.z = 0.05
 
         # Light gray
-        marker.color.r = 0.5
-        marker.color.g = 0.5
-        marker.color.b = 0.5
+        marker.color.r = 1.0
+        marker.color.g = 1.0
+        marker.color.b = 1.0
         marker.color.a = 1.0
 
         points = []
@@ -549,6 +561,32 @@ class PfSlam(Node):
 
         self.particle_pub.publish(marker)
 
+    def publish_landmarks(self, stamp):
+        best = self.get_best_particles()
+        if best is None:
+            return
+        
+        arr = PoseArray()
+        arr.header.stamp = stamp
+        arr.header.frame_id = "odom"
+
+
+        for color in self.landmarks["landmarks"].keys():
+            if color not in best["landmarks"]:
+                continue
+
+
+            lm = best["landmarks"][color]
+            pose = Pose()
+            pose.position.x = float(lm["mu"][0, 0])
+            pose.position.y = float(lm["mu"][1, 0])
+            pose.position.z = 0.0
+            pose.orientation.w = 1.0
+            arr.poses.append(pose)
+
+
+        self.landmarks_pub.publish(arr)
+
     def spin(self):
         rclpy.spin(self)
 
@@ -559,7 +597,6 @@ def main():
     pf_slam.spin()
     pf_slam.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

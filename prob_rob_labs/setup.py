@@ -33,6 +33,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'pf_error = pf_error.pf_error:main',
             'pf_slam = pf_slam.pf_slam:main',
             'lab6_assign5 = lab6_assign5.lab6_assign5:main',
             'localization_error = localization_error.localization_error:main',

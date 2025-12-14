@@ -47,27 +47,27 @@
     <include>
       <name>landmark_1</name>
       <uri>model://red_landmark</uri>
-      <pose>8.5 -5 0.25 0 0 0</pose>
+      <pose>2.5 -2 0.25 0 0 0</pose>
     </include>
     <include>
       <name>landmark_2</name>
       <uri>model://green_landmark</uri>
-      <pose>8.5 5 0.25 0 0 0</pose>
+      <pose>4.5 2 0.25 0 0 0</pose>
     </include>
     <include>
       <name>landmark_3</name>
       <uri>model://yellow_landmark</uri>
-      <pose>-11.5 5 0.25 0 0 0</pose>
+      <pose>-7.5 2 0.25 0 0 0</pose>
     </include>
     <include>
       <name>landmark_4</name>
       <uri>model://magenta_landmark</uri>
-      <pose>-11.5 -5 0.25 0 0 0</pose>
+      <pose>-4.5 -2 0.25 0 0 0</pose>
     </include>
     <include>
       <name>landmark_5</name>
       <uri>model://cyan_landmark</uri>
-      <pose>0 0 0.25 0 0 0</pose>
+      <pose>-5.5 4 0.25 0 0 0</pose>
     </include>
     <gui fullscreen='0'>
       <camera name='user_camera'>
