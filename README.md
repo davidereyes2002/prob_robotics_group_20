@@ -44,6 +44,9 @@ This project implements all core SLAM components explicitly:
   - Magenta Landmark: -4.5 -2 0.25
   - Cyan Landmark: -5.5 4 0.25
 
+ 
+---
+
 ## Algorithm Description
 
 ### FastSLAM based Particle Filter SLAM
@@ -77,5 +80,6 @@ Systematic resampling is triggered when $N_{\text{eff}} < \alpha N$, with & \alp
 ### Covergence and Loop Closure
 As the robot revisits previously observed landmarks, inconsistent particle hypotheses receive low likelihood and are eliminated during resampling. This process enables both robot pose and landmark map estimates to converge to a consistent solution, achieving loop closure without maintaining a full joint covariance.
 
+---
 
 
