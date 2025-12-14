@@ -2,23 +2,12 @@
 
 ## Overview
 
-This project implements a **Particle Filter–based SLAM system** for a TurtleBot3 operating in a landmark-rich Gazebo environment using ROS2.
+This repository contains a **from-scratch implementation of FastSLAM (FastSLAM 1.0)** for a TurtleBot3 platform in ROS 2. The system performs simultaneous localization and mapping using a particle filter over robot pose and independent EKF landmark estimators per particle, following the formulation introduced by **Thrun, Montemerlo, and colleagues**.
 
-The SLAM pipeline is inspired by **FastSLAM**, where:
-- a particle filter maintains multiple hypotheses of the robot pose,
-- each particle carries its own landmark map estimate,
-- probabilistic motion and measurement updates are applied,
-- resampling is used to focus on high-likelihood hypotheses.
-
-This project implements all core SLAM components explicitly:
-- particle propagation
-- measurement likelihood computation
-- landmark initialization and update
-- resampling
-- evaluation against ground truth
+The implementation integrates vision-based landmark observations, EKF-filtered odometry, and particle resampling to estimate both the robot trajectory and a sparse landmark map in a simulated Gazebo environment.
    
 <p align="center">
-  <img src="media/slam_demo.gif" width="600">
+  <img src="misc/clip2.gif" width="600">
 </p>
 
 ---
@@ -49,15 +38,30 @@ This project implements all core SLAM components explicitly:
 
 ## Algorithm Description
 
-### FastSLAM based Particle Filter SLAM
-This implementation follows the FastSLAM 1.0 framework proposed by Thrun et al., which factorizes the SLAM posterior into a particle filter over robot poses and independent landmark estimators conditioned on each particle’s trajectory.
-Each particle represents a hypothesis of the robot pose:
+### FastSLAM Factorization
+The SLAM posterior is factorized according to the FastSLAM principle:
 
-$$
-x_t[i] = (x, y, \theta)
-$$
+\[
+p(x_{1:t}, m \mid z_{1:t}, u_{1:t})
+=
+p(x_{1:t} \mid z_{1:t}, u_{1:t})
+\prod_i p(m_i \mid x_{1:t}, z_{1:t})
+\]
 
-and maintains its own map consisting of landmark means and covariances. Conditioned on a particle’s pose history, landmarks are assumed independent and are estimated using individual EKFs.
+This allows:
+- a **particle filter** to represent the robot pose distribution, and  
+- **independent EKFs** to estimate landmark positions conditioned on each particle’s pose history.
+
+### Particle Representation
+
+Each particle represents a complete SLAM hypothesis and stores:
+- robot pose: \( (x, y, \theta) \)
+- particle weight
+- a per-landmark map:
+  - landmark mean \( \mu_i \in \mathbb{R}^2 \)
+  - landmark covariance \( \Sigma_i \in \mathbb{R}^{2\times2} \)
+
+Landmarks are indexed by color, providing known data association.
 
 ### Motion update
 Robot motion is obtained from an EKF-based odometry estimate. Each particle is propagated forward using a velocity-based motion model with additive Gaussian noise:
@@ -69,6 +73,20 @@ $$
 Angle normalization is applied to maintain consistency.
 
 ### Measurement Update
+
+Landmark observations are obtained from a vision pipeline and provide **range and bearing** measurements derived from camera intrinsics and detected landmark corners.
+
+For each particle and observed landmark:
+- the expected measurement is computed
+- the innovation is formed and angle-normalized
+- an EKF update is applied to the landmark estimate
+- the particle weight is updated using the Gaussian measurement likelihood
+
+New landmarks are initialized using the inverse measurement model when first observed.
+
+Data association is assumed known via color-based landmark identification.
+
+### Resampling
 Particle degeneracy is monitored using the effective sample size:
 
 $$
@@ -79,6 +97,37 @@ Systematic resampling is triggered when $N_{\text{eff}} < \alpha N$, with & \alp
 
 ### Covergence and Loop Closure
 As the robot revisits previously observed landmarks, inconsistent particle hypotheses receive low likelihood and are eliminated during resampling. This process enables both robot pose and landmark map estimates to converge to a consistent solution, achieving loop closure without maintaining a full joint covariance.
+
+---
+
+## Observed Behavior (as shown in videos)
+
+- Particles are uniformly initialized across the environment.
+- Early landmark observations result in multiple valid pose hypotheses due to limited information.
+- As the robot moves and observes additional landmarks:
+  - particle hypotheses cluster
+  - map consistency improves
+- After repeated landmark observations and loop closure:
+  - inconsistent particles are eliminated
+  - both robot pose and landmark map converge to a stable solution
+
+These behaviors are visualized in RViz and confirmed via quantitative error plots.
+
+---
+
+## Global Offset and Error Interpretation
+
+The SLAM pose and map are estimated **in the odometry frame**, not in the Gazebo world frame.
+
+As expected for SLAM:
+- the recovered map is correct **up to a rigid-body transformation (SE(2) gauge freedom)**
+- absolute alignment with the Gazebo world is unobservable without an external reference
+
+This explains the small, persistent offsets visible in:
+- robot pose error plots
+- landmark position error plots
+
+Despite this offset, **relative geometry and map consistency are preserved**, which is the defining criterion for successful SLAM.
 
 ---
 
