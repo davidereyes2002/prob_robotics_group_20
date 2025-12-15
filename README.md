@@ -22,13 +22,14 @@ The implementation integrates vision-based landmark observations, EKF-filtered o
 
 ### SLAM with Randomized Landmark Configuration
 📺 https://www.youtube.com/watch?v=G2JGwp-YjP0
-- Landmarks placed at default locations:
+- Landmarks placed at randomly chosen locations:
   - Red Landmark: 2.5 -2 0.25
   - Green Landmark: 4.5 2 0.25
   - Yellow Landmark: -7.5 2 0.25 0 0 0</pose>
   - Magenta Landmark: -4.5 -2 0.25
   - Cyan Landmark: -5.5 4 0.25
 
+**Note:** The RQT Plots show the following: (1,1): Robot Position x value against ground truth x value | (1,2): Robot Position y value against ground truth y value | (2,1): SLAM computed Landmark x values | (2,2): SLAM computed landmark y values
  
 ---
 
@@ -86,7 +87,7 @@ $$
 N_{\text{eff}} = \frac{1}{\sum_i w_i^2}
 $$
 
-Systematic resampling is triggered when $N_{\text{eff}} < \alpha N$, with &\alpha = 0.5&, allowing unlikely hypotheses to be discarded while preserving multimodal pose distributions. 
+Systematic resampling is triggered when $N_{\text{eff}} < \alpha N$, with $\alpha = 0.5$, allowing unlikely hypotheses to be discarded while preserving multimodal pose distributions. 
 
 ### Covergence and Loop Closure
 As the robot revisits previously observed landmarks, inconsistent particle hypotheses receive low likelihood and are eliminated during resampling. This process enables both robot pose and landmark map estimates to converge to a consistent solution, achieving loop closure without maintaining a full joint covariance.
@@ -102,7 +103,24 @@ After repeated landmark observations and loop closure:
   - inconsistent particles are eliminated
   - both robot pose and landmark map converge to a stable solution
 
-These behaviors are visualized in RViz and confirmed via quantitative error plots.
+These behaviors are visualized in RViz and supported plots.
+
+**Plot 1:** Particles are initialized uniformly accross map to perform Global Localization. RViz also visualizes estimate pose of 3 landmarks that are in Robot cameras viewframe initially. 
+
+<img width="546" height="618" alt="image" src="https://github.com/user-attachments/assets/4d11b04f-5bbc-4afb-a075-04e21241ff28" /> <img width="642" height="385" alt="image" src="https://github.com/user-attachments/assets/26c20d9e-8bab-40b8-9a33-ccb2a60d014e" />
+The time-series plots of the robot pose (x and y in the map frame, obtained from odometry) and landmark positions show highly irregular behavior during the initial phase of operation. This is due to the particle filter being initialized with particles uniformly distributed across the map, causing frequent changes in the selected best particle for visualization. Consequently, both robot and landmark estimates exhibit large discontinuities and high variance, reflecting the lack of convergence and the presence of multiple competing pose hypotheses.
+
+**Plot 2:** After driving the robot and accumulating odometry and sensor measurements, the particles form a multimodal belief, with distinct clusters corresponding to multiple plausible robot poses.
+
+<img width="546" height="618" alt="image" src="https://github.com/user-attachments/assets/57a4db0e-3b72-4648-bbf5-bddeda4fab15" /> <img width="648" height="388" alt="image" src="https://github.com/user-attachments/assets/62aeb2ce-0469-4d0e-a0e7-89c1d6e77a9b" />
+
+**Plot 3:** Particles have converged to unimodal belief, with single cluster of plausible robot poses.
+
+<img width="546" height="618" alt="image" src="https://github.com/user-attachments/assets/d3ccde77-dd3b-4a4c-a545-a833e2c3b5d3" /> <img width="645" height="378" alt="image" src="https://github.com/user-attachments/assets/20b2477a-91b3-47f5-b782-6bd5b2c49793" />
+The time-series plots of the robot pose (x and y in the map frame) and landmark positions show smooth and stable trajectories after the particle filter has converged. As sensor measurements and odometry are accumulated, the particle set concentrates around a single consistent hypothesis, resulting in reduced variance and continuous estimates of both robot and landmark poses.
+
+**Note:** In the video it can also be observed that the belief sometimes diverges when the robot is driven around for a while without collecting measurement inforation. But as soon as a landmark is seen, the pose converges to a very narrow belief again. 
+
 
 ---
 
